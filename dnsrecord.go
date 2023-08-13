@@ -18,6 +18,10 @@ func (UnknownRecord) Name() string {
 	return "Unknown"
 }
 
+func (record UnknownRecord) String() string {
+	return fmt.Sprintf("%s %d %d %d", record.domain, record.ttl, record.qtype, record.dataLength)
+}
+
 type ARecord struct {
 	domain string
 	addr   net.IP
@@ -28,6 +32,10 @@ func (ARecord) isDnsRecord() {}
 
 func (record ARecord) Name() string {
 	return "A"
+}
+
+func (record ARecord) String() string {
+	return fmt.Sprintf("%s %d %s", record.domain, record.ttl, record.addr)
 }
 
 type NSRecord struct {
@@ -42,6 +50,10 @@ func (record NSRecord) Name() string {
 	return "NS"
 }
 
+func (record NSRecord) String() string {
+	return fmt.Sprintf("%s %d %s", record.domain, record.ttl, record.host)
+}
+
 type CNameRecord struct {
 	domain string
 	host   string
@@ -52,6 +64,10 @@ func (CNameRecord) isDnsRecord() {}
 
 func (record CNameRecord) Name() string {
 	return "CNAME"
+}
+
+func (record CNameRecord) String() string {
+	return fmt.Sprintf("%s %d %s", record.domain, record.ttl, record.host)
 }
 
 type MXRecord struct {
@@ -67,6 +83,10 @@ func (record MXRecord) Name() string {
 	return "MX"
 }
 
+func (record MXRecord) String() string {
+	return fmt.Sprintf("%s %d %s", record.domain, record.ttl, record.host)
+}
+
 type AAAARecord struct {
 	domain string
 	addr   net.IP
@@ -79,9 +99,14 @@ func (record AAAARecord) Name() string {
 	return "AAAA"
 }
 
+func (record AAAARecord) String() string {
+	return fmt.Sprintf("%s %d %s", record.domain, record.ttl, record.addr)
+}
+
 type DnsRecord interface {
 	isDnsRecord()
 	Name() string
+	String() string
 }
 
 func readDNSRecord(buffer *BytePacketBuffer) (DnsRecord, error) {
@@ -114,10 +139,10 @@ func readDNSRecord(buffer *BytePacketBuffer) (DnsRecord, error) {
 			return nil, fmt.Errorf("readDNSRecord.ReadU32.rawAddr: %s", err)
 		}
 		addr := net.IPv4(
-			byte(rawAddr>>24),
-			byte(rawAddr>>16),
-			byte(rawAddr>>8),
-			byte(rawAddr))
+			uint8(rawAddr>>24&0xFF),
+			uint8(rawAddr>>16&0xFF),
+			uint8(rawAddr>>8&0xFF),
+			uint8(rawAddr&0xFF))
 		return ARecord{domain, addr, ttl}, nil
 	case AAAA:
 		rawAddr1, err := buffer.ReadU32()
@@ -204,7 +229,7 @@ func WriteDNSRecord(buffer *BytePacketBuffer, record DnsRecord) (uint, error) {
 		if err := buffer.WriteU16(4); err != nil {
 			return 0, fmt.Errorf("WriteDNSRecord.WriteU16.dataLength: %s", err)
 		}
-		octets := []byte(record.addr)
+		octets := record.addr.To4()
 		if err := buffer.WriteU8(octets[0]); err != nil {
 			return 0, fmt.Errorf("WriteDNSRecord.WriteU8.octets[0]: %s", err)
 		}
@@ -322,7 +347,7 @@ func WriteDNSRecord(buffer *BytePacketBuffer, record DnsRecord) (uint, error) {
 			return 0, fmt.Errorf("WriteDNSRecord.WriteU16.dataLength: %s", err)
 		}
 
-		octets := []byte(record.addr)
+		octets := record.addr.To16()
 		for _, octet := range octets {
 			if err := buffer.WriteU8(octet); err != nil {
 				return 0, fmt.Errorf("WriteDNSRecord.WriteU8.octet: %s", err)

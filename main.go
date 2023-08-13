@@ -74,8 +74,6 @@ func lookup(qname string, qtype QueryType) (*DNSPacket, error) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Sent packet with ID %d to %s\n", packet.Header.ID, targetServer)
-
 	receivBuffer := NewBytesPacketBuffer()
 	_, _, err = receivConn.ReadFromUDP(receivBuffer.buf)
 	if err != nil {
@@ -97,18 +95,14 @@ func handleQuery(socketConn net.UDPConn) error {
 	reqBuffer := NewBytesPacketBuffer()
 	_, src, err := socketConn.ReadFromUDP(reqBuffer.buf)
 	if err != nil {
-		return fmt.Errorf("Error reading from socket", err)
+		return fmt.Errorf("Error reading from socket %w", err)
 	}
-
-	fmt.Printf("Received %d bytes from %s\n", reqBuffer.pos, src)
 
 	reqPacket := NewDNSPacket()
 	reqPacket, err = reqPacket.Read(reqBuffer)
 	if err != nil {
-		return fmt.Errorf("Error reading from buffer", err)
+		return fmt.Errorf("Error reading from buffer %w", err)
 	}
-
-	fmt.Printf("Received packet with ID %d\n", reqPacket.Header.ID)
 
 	respPacket := NewDNSPacket()
 	respPacket.Header.ID = reqPacket.Header.ID
@@ -117,15 +111,29 @@ func handleQuery(socketConn net.UDPConn) error {
 	respPacket.Header.response = true
 
 	if len(reqPacket.Questions) > 0 {
+
 		for _, q := range reqPacket.Questions {
+			fmt.Printf("Received Query: %s\n", q.String())
 			if packet, err := lookup(q.Name, q.Type); err != nil {
 				respPacket.Header.rescode = SERVFAIL
 			} else {
 				respPacket.Questions = append(respPacket.Questions, q)
 				respPacket.Header.rescode = packet.Header.rescode
-				respPacket.Answers = append(respPacket.Answers, packet.Answers...)
-				respPacket.Authorities = append(respPacket.Authorities, packet.Authorities...)
-				respPacket.Reources = append(respPacket.Reources, packet.Reources...)
+
+				for _, answer := range packet.Answers {
+					fmt.Printf("Answer: %s\n", answer.String())
+					respPacket.Answers = append(respPacket.Answers, answer)
+				}
+
+				for _, auth := range packet.Authorities {
+					fmt.Printf("Authority: %s\n", auth.String())
+					respPacket.Authorities = append(respPacket.Authorities, auth)
+				}
+
+				for _, resouces := range packet.Reources {
+					fmt.Printf("Resource: %s\n", resouces.String())
+					respPacket.Reources = append(respPacket.Reources, resouces)
+				}
 			}
 		}
 	} else {
@@ -134,17 +142,17 @@ func handleQuery(socketConn net.UDPConn) error {
 
 	respBuffer := NewBytesPacketBuffer()
 	if err := respPacket.Write(respBuffer); err != nil {
-		return fmt.Errorf("Error writing to buffer", err)
+		return fmt.Errorf("Error writing to buffer %w", err)
 	}
 
 	len := respBuffer.Pos()
 	data, err := respBuffer.GetRange(0, len)
 	if err != nil {
-		return fmt.Errorf("Error getting range", err)
+		return fmt.Errorf("Error getting range %w", err)
 	}
 
 	if _, err := socketConn.WriteToUDP(data, src); err != nil {
-		return fmt.Errorf("Error writing to socket", err)
+		return fmt.Errorf("Error writing to socket %w", err)
 	}
 
 	return nil

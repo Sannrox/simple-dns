@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type DNSQuestion struct {
 	Name string
 	Type QueryType
@@ -46,4 +48,8 @@ func (q *DNSQuestion) Write(b *BytePacketBuffer) error {
 	}
 
 	return nil
+}
+
+func (q *DNSQuestion) String() string {
+	return fmt.Sprintf("%s %s", q.Name, q.Type)
 }

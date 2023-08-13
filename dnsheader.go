@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type DNSHeader struct {
 	ID uint16
 
@@ -166,4 +168,8 @@ func (h *DNSHeader) encodeFlagsB() uint8 {
 	}
 
 	return flags
+}
+
+func (h *DNSHeader) String() string {
+	return fmt.Sprintf("ID: %d, RD: %t, TC: %t, AA: %t, OP: %d, R: %t, RCODE: %d, QD: %d, AN: %d, NS: %d, AR: %d", h.ID, h.recursionDesired, h.truncatedMessage, h.authoritative, h.opcode, h.response, h.rescode, h.questionCount, h.answerCount, h.authoritativeEntries, h.resourceEntries)
 }

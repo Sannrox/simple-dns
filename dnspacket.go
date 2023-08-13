@@ -1,6 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+	"net"
+	"strings"
+)
 
 type DNSPacket struct {
 	Header      *DNSHeader
@@ -99,4 +104,69 @@ func (d *DNSPacket) Write(buffer *BytePacketBuffer) error {
 	}
 
 	return nil
+}
+
+func (d *DNSPacket) GetRandomA() (net.IP, error) {
+
+	var answers []net.IP
+
+	for _, answer := range d.Answers {
+		if record, ok := answer.(*ARecord); ok {
+			answers = append(answers, record.addr)
+		}
+	}
+	if len(answers) > 0 {
+		randomIndex := rand.Intn(len(answers))
+		return answers[randomIndex], nil
+	}
+
+	return nil, fmt.Errorf("DNSPacket.GetRandomA: No A records found")
+}
+
+func (d *DNSPacket) GetNS(qname string) <-chan struct{ NSDomain, NSHost string } {
+	output := make(chan struct{ NSDomain, NSHost string })
+
+	go func() {
+		defer close(output)
+
+		for _, record := range d.Authorities {
+			if record, ok := record.(*NSRecord); ok {
+
+				if record.domain != "" && record.host != "" {
+					if strings.HasSuffix(qname, record.domain) {
+						output <- struct{ NSDomain, NSHost string }{NSDomain: record.domain, NSHost: record.host}
+					}
+				}
+			}
+		}
+	}()
+
+	return output
+}
+
+func (d *DNSPacket) GetResolvedNS(qname string) net.IP {
+	var resolvedIP net.IP
+	nsRecords := d.GetNS(qname)
+
+	for nsRecord := range nsRecords {
+		host := nsRecord.NSHost
+
+		// Look for a matching A record in the additional section
+		for _, record := range d.Reources {
+			if record, ok := record.(*ARecord); ok {
+
+				if record.domain == host && record.addr != nil {
+					resolvedIP = record.addr
+					break
+				}
+			}
+		}
+
+		if resolvedIP != nil {
+			break
+		}
+	}
+
+	return resolvedIP
+
 }
